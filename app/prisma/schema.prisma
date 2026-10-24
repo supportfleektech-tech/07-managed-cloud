@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  kraPin    String?  @map("kra_pin")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  memberships Membership[]
+  customers    Customer[]
+  environments Environment[]
+  migrations   MigrationJob[]
+  auditEvents  AuditEvent[]
+  apiKeys      ApiKey[]
+  @@map("organizations")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  memberships Membership[]
+  @@map("users")
+}
+
+model Membership {
+  id             String   @id @default(uuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String   @map("user_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@unique([userId, organizationId])
+  @@map("memberships")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Customer {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  name           String
+  contact        String?
+  email          String?
+  phone          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  environments   Environment[]
+  migrations     MigrationJob[]
+  @@index([organizationId])
+  @@map("customers")
+}
+
+model Environment {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  customer       Customer @relation(fields: [customerId], references: [id])
+  customerId     String   @map("customer_id")
+  name           String   // e.g. prod, staging
+  provider       CloudProvider
+  region         String
+  status         EnvStatus @default(PROVISIONING)
+  costCenter     String?  @map("cost_center")
+  monthlyCostCents Int    @default(0) @map("monthly_cost_cents")
+  currency       String   @default("KES")
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@map("environments")
+}
+
+enum CloudProvider {
+  AWS
+  AZURE
+  GCP
+  ON_PREM
+  HYBRID
+}
+
+enum EnvStatus {
+  PROVISIONING
+  ACTIVE
+  DEGRADED
+  PAUSED
+  DECOMMISSIONED
+}
+
+model MigrationJob {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  customer       Customer @relation(fields: [customerId], references: [id])
+  customerId     String   @map("customer_id")
+  sourceEnv      String   @map("source_env")
+  targetEnv      String   @map("target_env")
+  scope          Json
+  status         MigrationStatus @default(PLANNED)
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@index([organizationId, status])
+  @@map("migration_jobs")
+}
+
+enum MigrationStatus {
+  PLANNED
+  APPROVED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ROLLED_BACK
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  actorId        String?  @map("actor_id")
+  action         String
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@index([organizationId, createdAt])
+  @@map("audit_events")
+}
+
+model ApiKey {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  name           String
+  hashedKey      String   @map("hashed_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+  revokedAt      DateTime? @map("revoked_at")
+  @@map("api_keys")
+}
